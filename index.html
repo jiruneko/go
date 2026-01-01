@@ -1,0 +1,907 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>囲碁（9路） vs COM</title>
+  <style>
+    :root{
+      --bg:#0b1020; --panel:#111a33; --ink:#e9eeff; --muted:#a9b3d6;
+      --line:rgba(255,255,255,.18);
+      --wood1:#caa66b; --wood2:#b89055; --shadow:rgba(0,0,0,.35);
+      --btn:#2a3a72; --btn2:#3a55a6; --danger:#b54b4b;
+      --chip:#1a2447; --focus:#9cc3ff;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0; background:radial-gradient(1200px 600px at 30% 10%, #1a2a66 0%, var(--bg) 55%, #050814 100%);
+      color:var(--ink); font:14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,"Apple Color Emoji","Segoe UI Emoji";
+      min-height:100vh; display:flex; align-items:center; justify-content:center; padding:18px;
+    }
+    .app{
+      width:min(980px, 100%); display:grid; grid-template-columns: 1.2fr .8fr; gap:16px;
+    }
+    @media (max-width: 900px){
+      .app{grid-template-columns:1fr; }
+    }
+    .card{
+      background:linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
+      border:1px solid rgba(255,255,255,.10);
+      border-radius:16px; box-shadow:0 18px 50px var(--shadow);
+      overflow:hidden;
+    }
+    .boardWrap{ padding:14px; }
+    .boardTop{
+      display:flex; align-items:center; justify-content:space-between;
+      gap:10px; padding:12px 14px; border-bottom:1px solid rgba(255,255,255,.08);
+      background:rgba(0,0,0,.15);
+    }
+    .title{font-weight:700; letter-spacing:.3px}
+    .sub{color:var(--muted); font-size:12px}
+    .status{
+      display:flex; gap:10px; flex-wrap:wrap; align-items:center; justify-content:flex-end;
+    }
+    .pill{
+      padding:6px 10px; border-radius:999px; background:rgba(255,255,255,.06);
+      border:1px solid rgba(255,255,255,.10); color:var(--ink);
+      display:flex; gap:8px; align-items:center;
+      white-space:nowrap;
+    }
+    .dot{width:10px; height:10px; border-radius:50%;}
+    .dot.black{background:#0b0b0b; box-shadow: inset 0 1px 2px rgba(255,255,255,.2)}
+    .dot.white{background:#f3f3f3; box-shadow: inset 0 1px 2px rgba(0,0,0,.18)}
+    .dot.none{background:#6aa0ff}
+    .grid{
+      display:grid; place-items:center;
+      background:linear-gradient(135deg, var(--wood1), var(--wood2));
+      border-radius:14px;
+      border:1px solid rgba(0,0,0,.25);
+      box-shadow: inset 0 10px 24px rgba(255,255,255,.10), 0 18px 40px rgba(0,0,0,.35);
+      padding:16px;
+    }
+    canvas{
+      width:100%;
+      max-width:620px;
+      height:auto;
+      aspect-ratio: 1/1;
+      display:block;
+      border-radius:12px;
+      background:rgba(255,255,255,.03);
+      box-shadow: inset 0 0 0 1px rgba(0,0,0,.20);
+      cursor:pointer;
+      touch-action:manipulation;
+    }
+    .side{padding:14px}
+    .side h3{margin:0 0 10px 0; font-size:14px}
+    .controls{display:grid; gap:10px}
+    .row{display:flex; gap:10px; flex-wrap:wrap}
+    select, button{
+      border-radius:12px; border:1px solid rgba(255,255,255,.12);
+      background:rgba(255,255,255,.06);
+      color:var(--ink);
+      padding:10px 12px; outline:none;
+    }
+    select:focus, button:focus{box-shadow:0 0 0 3px rgba(156,195,255,.25); border-color:rgba(156,195,255,.55)}
+    button{
+      background:linear-gradient(180deg, var(--btn2), var(--btn));
+      cursor:pointer;
+      font-weight:700;
+    }
+    button.secondary{
+      background:rgba(255,255,255,.06);
+      font-weight:600;
+    }
+    button.danger{
+      background:linear-gradient(180deg, #d06a6a, var(--danger));
+    }
+    .kvs{
+      display:grid; gap:8px; margin-top:12px;
+      padding:12px; border-radius:14px; background:rgba(0,0,0,.15);
+      border:1px solid rgba(255,255,255,.08);
+    }
+    .kv{display:flex; justify-content:space-between; gap:10px; color:var(--muted)}
+    .kv b{color:var(--ink)}
+    .log{
+      margin-top:12px; padding:12px;
+      border-radius:14px; background:rgba(0,0,0,.15);
+      border:1px solid rgba(255,255,255,.08);
+      color:var(--muted);
+      min-height:88px;
+      white-space:pre-wrap;
+    }
+    .hint{font-size:12px; color:var(--muted); margin-top:10px}
+    .kbd{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;
+      padding:2px 6px; border-radius:8px;
+      border:1px solid rgba(255,255,255,.14); background:rgba(255,255,255,.06); color:var(--ink)}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="card">
+      <div class="boardTop">
+        <div>
+          <div class="title">囲碁（9路）vs COM</div>
+          <div class="sub">あなた：黒　/　COM：白（コミ 6.5）</div>
+        </div>
+        <div class="status">
+          <div class="pill"><span class="dot" id="turnDot"></span><span id="turnText">—</span></div>
+          <div class="pill">手数 <b id="moveNo">0</b></div>
+          <div class="pill">連続パス <b id="passStreak">0</b></div>
+        </div>
+      </div>
+      <div class="boardWrap">
+        <div class="grid">
+          <canvas id="cv" width="900" height="900" aria-label="Go board"></canvas>
+        </div>
+        <div class="hint">
+          クリックで着手。<span class="kbd">P</span>でパス、<span class="kbd">R</span>でリセット。
+          ルールは基本（取り・自殺禁止・簡易コウ）対応。終局は「両者連続パス」で自動判定。
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="side">
+        <h3>設定</h3>
+        <div class="controls">
+          <div class="row">
+            <label style="display:flex; flex-direction:column; gap:6px; flex:1; min-width:170px;">
+              <span class="sub">難易度</span>
+              <select id="difficulty">
+                <option value="0">やさしい（ランダム寄り）</option>
+                <option value="1" selected>ふつう（取り優先）</option>
+                <option value="2">ちょい強（1手読み）</option>
+              </select>
+            </label>
+            <label style="display:flex; flex-direction:column; gap:6px; flex:1; min-width:170px;">
+              <span class="sub">盤サイズ</span>
+              <select id="size">
+                <option value="9" selected>9路（おすすめ）</option>
+                <option value="13">13路（重め）</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="row">
+            <button id="newGame">新規ゲーム</button>
+            <button class="secondary" id="passBtn">パス</button>
+            <button class="secondary" id="undoBtn">1手戻す</button>
+            <button class="danger" id="resignBtn">投了</button>
+          </div>
+
+          <div class="kvs">
+            <div class="kv"><span>黒（あなた）捕獲</span><b id="capB">0</b></div>
+            <div class="kv"><span>白（COM）捕獲</span><b id="capW">0</b></div>
+            <div class="kv"><span>推定：黒地+石</span><b id="scoreB">—</b></div>
+            <div class="kv"><span>推定：白地+石+コミ</span><b id="scoreW">—</b></div>
+          </div>
+
+          <div class="log" id="log"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+(() => {
+  // ====== Basic Types ======
+  const EMPTY = 0, BLACK = 1, WHITE = 2;
+
+  const cv = document.getElementById('cv');
+  const ctx = cv.getContext('2d');
+
+  const ui = {
+    difficulty: document.getElementById('difficulty'),
+    size: document.getElementById('size'),
+    newGame: document.getElementById('newGame'),
+    passBtn: document.getElementById('passBtn'),
+    undoBtn: document.getElementById('undoBtn'),
+    resignBtn: document.getElementById('resignBtn'),
+    turnDot: document.getElementById('turnDot'),
+    turnText: document.getElementById('turnText'),
+    moveNo: document.getElementById('moveNo'),
+    passStreak: document.getElementById('passStreak'),
+    capB: document.getElementById('capB'),
+    capW: document.getElementById('capW'),
+    scoreB: document.getElementById('scoreB'),
+    scoreW: document.getElementById('scoreW'),
+    log: document.getElementById('log')
+  };
+
+  // ====== Game State ======
+  let N = 9;
+  let board = [];
+  let turn = BLACK;          // player = BLACK, com = WHITE
+  let moveNumber = 0;
+  let passStreak = 0;
+  let capturesB = 0, capturesW = 0;
+  let komi = 6.5;
+  let lastBoardHash = "";     // simple-ko: forbid immediate repetition
+  let history = [];           // for undo: store snapshots
+
+  function initBoard(size){
+    N = size;
+    board = Array.from({length:N}, () => Array(N).fill(EMPTY));
+    turn = BLACK;
+    moveNumber = 0;
+    passStreak = 0;
+    capturesB = 0; capturesW = 0;
+    lastBoardHash = hashBoard(board);
+    history = [];
+    pushHistory("start");
+    log(`新規ゲーム開始：${N}路 / あなた黒 / COM白（コミ ${komi}）`);
+    render();
+    if (turn === WHITE) comMove();
+  }
+
+  function pushHistory(reason){
+    history.push({
+      reason,
+      board: board.map(r => r.slice()),
+      turn,
+      moveNumber,
+      passStreak,
+      capturesB,
+      capturesW,
+      lastBoardHash
+    });
+    if (history.length > 200) history.shift();
+  }
+
+  function undo(){
+    if (history.length <= 1) return;
+    // revert one full ply (player/com) comfortably:
+    history.pop();
+    const s = history[history.length - 1];
+    board = s.board.map(r => r.slice());
+    turn = s.turn;
+    moveNumber = s.moveNumber;
+    passStreak = s.passStreak;
+    capturesB = s.capturesB;
+    capturesW = s.capturesW;
+    lastBoardHash = s.lastBoardHash;
+    log(`1手戻しました。`);
+    render();
+  }
+
+  // ====== Utilities ======
+  const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
+  const inBounds = (x,y) => x>=0 && y>=0 && x<N && y<N;
+  const opp = (c) => c===BLACK ? WHITE : (c===WHITE ? BLACK : EMPTY);
+
+  function hashBoard(b){
+    // compact string hash; enough for simple-ko check
+    let s = "" + N + "|";
+    for (let y=0;y<N;y++){
+      for (let x=0;x<N;x++){
+        s += b[y][x];
+      }
+    }
+    return s;
+  }
+
+  function neighbors(x,y){
+    const out = [];
+    for (const [dx,dy] of dirs){
+      const nx=x+dx, ny=y+dy;
+      if (inBounds(nx,ny)) out.push([nx,ny]);
+    }
+    return out;
+  }
+
+  function floodGroup(b, sx, sy){
+    const color = b[sy][sx];
+    if (color === EMPTY) return {stones:[], liberties: new Set()};
+    const q = [[sx,sy]];
+    const seen = new Set([sx+","+sy]);
+    const stones = [];
+    const liberties = new Set();
+
+    while(q.length){
+      const [x,y] = q.pop();
+      stones.push([x,y]);
+      for (const [nx,ny] of neighbors(x,y)){
+        const v = b[ny][nx];
+        if (v === EMPTY){
+          liberties.add(nx+","+ny);
+        } else if (v === color){
+          const key = nx+","+ny;
+          if (!seen.has(key)){
+            seen.add(key);
+            q.push([nx,ny]);
+          }
+        }
+      }
+    }
+    return {stones, liberties};
+  }
+
+  function removeStones(b, stones){
+    for (const [x,y] of stones) b[y][x] = EMPTY;
+  }
+
+  function cloneBoard(b){
+    return b.map(r => r.slice());
+  }
+
+  // ====== Move Legality & Play ======
+  function tryPlayMove(color, x, y, applyToMain=false){
+    // returns: {ok, board, capCount, reason, newHash}
+    const b = applyToMain ? board : cloneBoard(board);
+    if (!inBounds(x,y)) return {ok:false, reason:"盤外"};
+    if (b[y][x] !== EMPTY) return {ok:false, reason:"そこは埋まっています"};
+
+    b[y][x] = color;
+
+    let cap = 0;
+    // capture opponent groups with no liberties
+    for (const [nx,ny] of neighbors(x,y)){
+      if (b[ny][nx] === opp(color)){
+        const g = floodGroup(b, nx, ny);
+        if (g.liberties.size === 0){
+          cap += g.stones.length;
+          removeStones(b, g.stones);
+        }
+      }
+    }
+
+    // suicide check (after captures)
+    const self = floodGroup(b, x, y);
+    if (self.liberties.size === 0){
+      return {ok:false, reason:"自殺手は禁止です"};
+    }
+
+    // simple ko: forbid immediate repetition of previous position (one move ago)
+    const newHash = hashBoard(b);
+    if (newHash === lastBoardHash){
+      return {ok:false, reason:"コウ（簡易）で禁止です"};
+    }
+
+    return {ok:true, board:b, capCount:cap, newHash};
+  }
+
+  function play(color, x, y){
+    const res = tryPlayMove(color, x, y, false);
+    if (!res.ok) return res;
+
+    // commit
+    pushHistory("beforeMove");
+    board = res.board;
+    // update lastBoardHash to hash of position BEFORE current move? For simple ko we used lastBoardHash as "position 2 plies ago" style.
+    // Here we want to forbid immediate repetition of previous position (just before this move), so store previous hash in lastBoardHash after commit:
+    lastBoardHash = hashBoard(history[history.length - 1].board); // position before move
+    // captures
+    if (color === BLACK) capturesB += res.capCount; else capturesW += res.capCount;
+
+    turn = opp(color);
+    moveNumber++;
+    passStreak = 0;
+
+    render();
+    maybeAutoScore();
+
+    return {ok:true};
+  }
+
+  function pass(){
+    pushHistory("pass");
+    lastBoardHash = hashBoard(history[history.length - 1].board); // keep ko baseline aligned
+    turn = opp(turn);
+    moveNumber++;
+    passStreak++;
+    log(`${turn===BLACK ? "COM" : "あなた"}がパスしました。`);
+    render();
+
+    if (passStreak >= 2){
+      endByBothPass();
+      return;
+    }
+    if (turn === WHITE) comMove();
+  }
+
+  function resign(){
+    const winner = (turn === BLACK) ? "COM（白）" : "あなた（黒）";
+    log(`投了。勝者：${winner}`);
+    // disable moves by setting turn to EMPTY
+    turn = EMPTY;
+    render();
+  }
+
+  // ====== Scoring (simple area-ish estimation) ======
+  function estimateScore(b){
+    // rough estimation: stones on board + surrounded empty areas (only if bordered by single color)
+    let stonesB = 0, stonesW = 0;
+    for (let y=0;y<N;y++){
+      for (let x=0;x<N;x++){
+        if (b[y][x]===BLACK) stonesB++;
+        else if (b[y][x]===WHITE) stonesW++;
+      }
+    }
+
+    const seen = new Set();
+    let terrB=0, terrW=0;
+
+    for (let y=0;y<N;y++){
+      for (let x=0;x<N;x++){
+        if (b[y][x]!==EMPTY) continue;
+        const key = x+","+y;
+        if (seen.has(key)) continue;
+
+        // flood empty region
+        const q = [[x,y]];
+        const empties = [];
+        const borderColors = new Set();
+        seen.add(key);
+
+        while(q.length){
+          const [cx,cy] = q.pop();
+          empties.push([cx,cy]);
+          for (const [nx,ny] of neighbors(cx,cy)){
+            const v = b[ny][nx];
+            if (v===EMPTY){
+              const k = nx+","+ny;
+              if (!seen.has(k)){
+                seen.add(k);
+                q.push([nx,ny]);
+              }
+            } else {
+              borderColors.add(v);
+            }
+          }
+        }
+
+        if (borderColors.size === 1){
+          const c = [...borderColors][0];
+          if (c===BLACK) terrB += empties.length;
+          else if (c===WHITE) terrW += empties.length;
+        }
+      }
+    }
+
+    // capture counts are already "taken" stones; for a quick display include them as advantage too
+    const scoreB = stonesB + terrB + capturesB;
+    const scoreW = stonesW + terrW + capturesW + komi;
+    return {scoreB, scoreW, stonesB, stonesW, terrB, terrW};
+  }
+
+  function maybeAutoScore(){
+    const est = estimateScore(board);
+    ui.scoreB.textContent = est.scoreB.toFixed(1);
+    ui.scoreW.textContent = est.scoreW.toFixed(1);
+  }
+
+  function endByBothPass(){
+    const est = estimateScore(board);
+    const winner = (est.scoreB > est.scoreW) ? "あなた（黒）" : "COM（白）";
+    log(`終局（両者連続パス）。推定結果：黒 ${est.scoreB.toFixed(1)} / 白 ${est.scoreW.toFixed(1)}（コミ込み） → 勝者：${winner}`);
+    turn = EMPTY;
+    render();
+  }
+
+  // ====== AI ======
+  function listLegalMoves(color){
+    const moves = [];
+    for (let y=0;y<N;y++){
+      for (let x=0;x<N;x++){
+        if (board[y][x] !== EMPTY) continue;
+        const res = tryPlayMove(color, x, y, false);
+        if (res.ok) moves.push({x,y, cap:res.capCount, next:res.board});
+      }
+    }
+    return moves;
+  }
+
+  function evalBoardForWhite(b, capWLocal, capBLocal){
+    // evaluation from WHITE perspective (b is board after hypothetical)
+    // simple: (white stones - black stones) + (territory rough) + captures diff
+    // plus a light liberties factor
+    const savedBoard = board;
+    const savedCB = capturesB, savedCW = capturesW;
+
+    // temporarily swap globals for estimateScore to work with correct capture numbers
+    board = b; capturesB = capBLocal; capturesW = capWLocal;
+    const est = estimateScore(b);
+
+    // liberties heuristic
+    let libW=0, libB=0;
+    const visited = new Set();
+    for (let y=0;y<N;y++){
+      for (let x=0;x<N;x++){
+        const c = b[y][x];
+        if (c===EMPTY) continue;
+        const k = x+","+y;
+        if (visited.has(k)) continue;
+        const g = floodGroup(b,x,y);
+        for (const [sx,sy] of g.stones) visited.add(sx+","+sy);
+        if (c===WHITE) libW += g.liberties.size;
+        else libB += g.liberties.size;
+      }
+    }
+
+    const val =
+      (est.scoreW - est.scoreB)      // already includes komi, captures
+      + 0.08*(libW - libB);
+
+    // restore
+    board = savedBoard; capturesB = savedCB; capturesW = savedCW;
+    return val;
+  }
+
+  function comChooseMove(){
+    const diff = Number(ui.difficulty.value);
+    const moves = listLegalMoves(WHITE);
+
+    // If no legal moves: pass
+    if (moves.length === 0) return {type:"pass"};
+
+    // Difficulty 0: mostly random but prefers capture sometimes
+    if (diff === 0){
+      const capMoves = moves.filter(m => m.cap>0);
+      if (capMoves.length && Math.random() < 0.65){
+        return {type:"move", ...capMoves[Math.floor(Math.random()*capMoves.length)]};
+      }
+      return {type:"move", ...moves[Math.floor(Math.random()*moves.length)]};
+    }
+
+    // Difficulty 1: greedy: maximize (captures + estimated score gain)
+    if (diff === 1){
+      let best = null;
+      let bestV = -Infinity;
+      for (const m of moves){
+        // quick eval: capture weight + local score estimate
+        const v = m.cap*2.5 + evalBoardForWhite(m.next, capturesW + m.cap, capturesB);
+        if (v > bestV){
+          bestV = v;
+          best = m;
+        }
+      }
+      // Sometimes pass if ahead and no good move
+      const curV = evalBoardForWhite(board, capturesW, capturesB);
+      if (bestV < curV - 0.2 && Math.random() < 0.35){
+        return {type:"pass"};
+      }
+      return {type:"move", ...best};
+    }
+
+    // Difficulty 2: 1-ply minimax (white move -> best black reply), pick move that maximizes worst-case
+    let best = null;
+    let bestV = -Infinity;
+
+    for (const m of moves){
+      // after white plays m, black replies
+      const afterW = m.next;
+      const capW2 = capturesW + m.cap;
+      const capB2 = capturesB;
+
+      // generate black legal moves on that board (need temporary swap)
+      const savedBoard = board, savedCB = capturesB, savedCW = capturesW, savedHash = lastBoardHash;
+      board = afterW; capturesB = capB2; capturesW = capW2;
+      // ko baseline for this hypothetical: use hash of position BEFORE white move, so forbid immediate repetition properly
+      // (roughly okay; AI doesn't rely heavily on ko nuances)
+      lastBoardHash = hashBoard(savedBoard);
+
+      const replies = listLegalMoves(BLACK);
+      let worst = Infinity;
+
+      if (replies.length === 0){
+        // black pass => evaluate
+        worst = evalBoardForWhite(afterW, capW2, capB2);
+      } else {
+        // black picks best for black => worst for white
+        for (const r of replies){
+          // r.next is after black move
+          // update caps for black
+          const capB3 = capB2 + r.cap;
+          const v = evalBoardForWhite(r.next, capW2, capB3);
+          if (v < worst) worst = v;
+        }
+      }
+
+      // restore
+      board = savedBoard; capturesB = savedCB; capturesW = savedCW; lastBoardHash = savedHash;
+
+      // prefer captures a bit
+      const score = worst + m.cap*0.9;
+      if (score > bestV){
+        bestV = score;
+        best = m;
+      }
+    }
+
+    // cautious pass option
+    const curV = evalBoardForWhite(board, capturesW, capturesB);
+    if (bestV < curV - 0.35 && Math.random() < 0.25){
+      return {type:"pass"};
+    }
+    return {type:"move", ...best};
+  }
+
+  function comMove(){
+    if (turn !== WHITE) return;
+    if (turn === EMPTY) return;
+
+    // small delay for UX
+    setTimeout(() => {
+      const choice = comChooseMove();
+      if (turn !== WHITE || turn === EMPTY) return;
+
+      if (choice.type === "pass"){
+        log(`COMがパス。`);
+        pass(); // handles streak/end/next
+        return;
+      }
+
+      const {x,y} = choice;
+      const res = play(WHITE, x, y);
+      if (!res.ok){
+        // fallback: pass
+        log(`COMの着手が失敗（${res.reason}）→ パス`);
+        pass();
+        return;
+      }
+      log(`COM：${toCoord(x,y)} に着手`);
+      if (turn === BLACK) {
+        // player's turn
+      }
+    }, 220);
+  }
+
+  // ====== Rendering ======
+  function toCoord(x,y){
+    // Go coords: skip I (A,B,C...H,J...)
+    const letters = "ABCDEFGHJKLMNOPQRSTUVWX";
+    return `${letters[x]}${N - y}`;
+  }
+
+  function updateUI(){
+    ui.turnDot.className = "dot " + (turn===BLACK ? "black" : (turn===WHITE ? "white" : "none"));
+    ui.turnText.textContent = (turn===BLACK ? "あなたの番（黒）" : (turn===WHITE ? "COM思考中（白）" : "終了"));
+    ui.moveNo.textContent = String(moveNumber);
+    ui.passStreak.textContent = String(passStreak);
+    ui.capB.textContent = String(capturesB);
+    ui.capW.textContent = String(capturesW);
+    maybeAutoScore();
+  }
+
+  function render(){
+    updateUI();
+
+    const W = cv.width, H = cv.height;
+    ctx.clearRect(0,0,W,H);
+
+    const pad = Math.round(W * 0.08);
+    const size = W - pad*2;
+    const step = size/(N-1);
+
+    // board background subtle
+    ctx.save();
+    ctx.globalAlpha = 0.08;
+    ctx.fillStyle = "#000";
+    ctx.fillRect(pad-8, pad-8, size+16, size+16);
+    ctx.restore();
+
+    // grid lines
+    ctx.strokeStyle = "rgba(0,0,0,.45)";
+    ctx.lineWidth = Math.max(2, W*0.0022);
+
+    for (let i=0;i<N;i++){
+      const x = pad + i*step;
+      const y = pad + i*step;
+
+      ctx.beginPath();
+      ctx.moveTo(pad, y);
+      ctx.lineTo(pad+size, y);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(x, pad);
+      ctx.lineTo(x, pad+size);
+      ctx.stroke();
+    }
+
+    // star points (9/13)
+    drawStarPoints(pad, step);
+
+    // stones
+    const r = step*0.44;
+    for (let y=0;y<N;y++){
+      for (let x=0;x<N;x++){
+        const c = board[y][x];
+        if (c === EMPTY) continue;
+        const px = pad + x*step;
+        const py = pad + y*step;
+        drawStone(px, py, r, c);
+      }
+    }
+
+    // last move highlight: use last history snapshot reason
+    // (optional lightweight) -> highlight last placed stone if last action was move
+    const last = history[history.length-1];
+    if (last && last.reason === "beforeMove"){
+      // After "beforeMove" we commit; so the current board includes the move.
+      // We can find diff between last.board and current board to locate the move
+      const p = findDiff(last.board, board);
+      if (p){
+        const px = pad + p.x*step;
+        const py = pad + p.y*step;
+        ctx.save();
+        ctx.strokeStyle = "rgba(156,195,255,.85)";
+        ctx.lineWidth = Math.max(3, step*0.08);
+        ctx.beginPath();
+        ctx.arc(px, py, r*0.55, 0, Math.PI*2);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+  }
+
+  function findDiff(prev, curr){
+    let found = null;
+    for (let y=0;y<N;y++){
+      for (let x=0;x<N;x++){
+        if (prev[y][x] !== curr[y][x]){
+          // likely placed stone or capture. Prefer newly placed: prev empty -> curr not empty
+          if (prev[y][x] === EMPTY && curr[y][x] !== EMPTY) return {x,y};
+          found = found || {x,y};
+        }
+      }
+    }
+    return found;
+  }
+
+  function drawStone(x,y,r,color){
+    ctx.save();
+    // shadow
+    ctx.globalAlpha = 0.35;
+    ctx.fillStyle = "#000";
+    ctx.beginPath();
+    ctx.arc(x + r*0.10, y + r*0.14, r*0.98, 0, Math.PI*2);
+    ctx.fill();
+
+    // body
+    ctx.globalAlpha = 1;
+    const grad = ctx.createRadialGradient(x - r*0.35, y - r*0.40, r*0.2, x, y, r*1.2);
+    if (color === BLACK){
+      grad.addColorStop(0, "rgba(120,120,120,.9)");
+      grad.addColorStop(0.35, "rgba(25,25,25,1)");
+      grad.addColorStop(1, "rgba(0,0,0,1)");
+    } else {
+      grad.addColorStop(0, "rgba(255,255,255,1)");
+      grad.addColorStop(0.55, "rgba(240,240,240,1)");
+      grad.addColorStop(1, "rgba(210,210,210,1)");
+    }
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI*2);
+    ctx.fill();
+
+    // outline
+    ctx.strokeStyle = "rgba(0,0,0,.35)";
+    ctx.lineWidth = Math.max(1.5, r*0.08);
+    ctx.stroke();
+
+    ctx.restore();
+  }
+
+  function drawStarPoints(pad, step){
+    const pts = [];
+    if (N === 9){
+      const s = [2,4,6];
+      for (const y of s) for (const x of s) pts.push([x,y]);
+      // but standard 9 is 5 points (center + 4 corners at 2,2 / 2,6 / 6,2 / 6,6)
+      pts.length = 0;
+      pts.push([4,4],[2,2],[2,6],[6,2],[6,6]);
+    } else if (N === 13){
+      pts.push([3,3],[3,9],[9,3],[9,9],[6,6]);
+    } else {
+      return;
+    }
+    ctx.save();
+    ctx.fillStyle = "rgba(0,0,0,.45)";
+    for (const [x,y] of pts){
+      const px = pad + x*step;
+      const py = pad + y*step;
+      ctx.beginPath();
+      ctx.arc(px, py, step*0.10, 0, Math.PI*2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // ====== Input ======
+  function canvasToBoard(mx,my){
+    const W = cv.width;
+    const pad = Math.round(W * 0.08);
+    const size = W - pad*2;
+    const step = size/(N-1);
+
+    const x = (mx - pad)/step;
+    const y = (my - pad)/step;
+
+    const ix = Math.round(x);
+    const iy = Math.round(y);
+
+    // tolerance: must be near intersection
+    const px = pad + ix*step;
+    const py = pad + iy*step;
+    const dist = Math.hypot(mx - px, my - py);
+    if (dist > step*0.45) return null;
+    if (!inBounds(ix,iy)) return null;
+    return {x:ix,y:iy};
+  }
+
+  function onClick(e){
+    if (turn !== BLACK) return;
+    if (turn === EMPTY) return;
+
+    const rect = cv.getBoundingClientRect();
+    const mx = (e.clientX - rect.left) * (cv.width / rect.width);
+    const my = (e.clientY - rect.top) * (cv.height / rect.height);
+
+    const p = canvasToBoard(mx,my);
+    if (!p) return;
+
+    const res = play(BLACK, p.x, p.y);
+    if (!res.ok){
+      log(`着手不可：${res.reason}`);
+      return;
+    }
+    log(`あなた：${toCoord(p.x,p.y)} に着手`);
+    if (turn === WHITE) comMove();
+  }
+
+  // ====== Logging ======
+  function log(msg){
+    const t = new Date();
+    const hh = String(t.getHours()).padStart(2,"0");
+    const mm = String(t.getMinutes()).padStart(2,"0");
+    ui.log.textContent = `[${hh}:${mm}] ${msg}\n` + ui.log.textContent.slice(0, 900);
+  }
+
+  // ====== Events ======
+  cv.addEventListener('click', onClick);
+
+  ui.newGame.addEventListener('click', () => {
+    initBoard(Number(ui.size.value));
+  });
+
+  ui.size.addEventListener('change', () => {
+    initBoard(Number(ui.size.value));
+  });
+
+  ui.passBtn.addEventListener('click', () => {
+    if (turn === EMPTY) return;
+    pass();
+  });
+
+  ui.undoBtn.addEventListener('click', () => {
+    // Undo twice if it's COM turn to avoid awkwardness (optional)
+    if (turn === WHITE && history.length > 2){
+      undo();
+      undo();
+      log("（COMの手も含めて戻しました）");
+      render();
+      return;
+    }
+    undo();
+  });
+
+  ui.resignBtn.addEventListener('click', () => resign());
+
+  window.addEventListener('keydown', (e) => {
+    if (e.key.toLowerCase() === 'p'){
+      e.preventDefault();
+      if (turn !== EMPTY) pass();
+    }
+    if (e.key.toLowerCase() === 'r'){
+      e.preventDefault();
+      initBoard(Number(ui.size.value));
+    }
+  });
+
+  // ====== Start ======
+  initBoard(Number(ui.size.value));
+})();
+</script>
+</body>
+</html>
